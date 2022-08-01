@@ -1,8 +1,7 @@
 import SwiftUI
 
-@available(iOS 14, macOS 12.0, *)
 public struct TachoView: View {
-    func tick(at angle: Angle, size: CGFloat) -> some View {
+    func tick(of size: CGFloat) -> some View {
         let calcWidth = 0.025 * size
         let calcHeight = 0.12 * size
         return VStack {
@@ -11,11 +10,11 @@ public struct TachoView: View {
                 .frame(width: calcWidth, height: calcHeight)
                 .cornerRadius(calcWidth / 2)
             Spacer()
-        }.rotationEffect(angle)
-            .padding(calcHeight * 0.85)
+        }
+        .padding(calcHeight * 0.85)
     }
     
-    func needle(at angle: Angle, size: CGFloat) -> some View {
+    func needle(of size: CGFloat) -> some View {
         let calcWidth = 0.06 * size
         let calcHeight = 0.46 * size
         return VStack {
@@ -24,64 +23,64 @@ public struct TachoView: View {
                 .frame(width: calcWidth, height: calcHeight)
                 .cornerRadius(calcWidth / 2)
             Spacer()
-        }.rotationEffect(angle)
-            .padding(calcHeight * 0.3)
+        }
+        .shadow(radius: 2)
+        .padding(calcHeight * 0.3)
     }
     
     private var tickAngles: Array<Angle> {
-        let startAngle = coveredRadius / 2 * -1
-        let stepper = coveredRadius / Double(tickCount + 1)
-        var angles = [Angle(degrees: startAngle)]
-        angles.append(contentsOf: (0..<tickCount+1).map { tick in
-            return Angle.degrees(startAngle + stepper * Double(tick + 1))
-        })
-        return angles
+        let coveredRadius: Double = 255
+        let coveredRadiusHalf = coveredRadius / 2
+        return stride(
+            from: -coveredRadiusHalf,
+            through: coveredRadiusHalf,
+            by: coveredRadius / Double(tickCount + 1)
+        ).map(Angle.degrees)
     }
+
+    var tickCount: Int
+    var tachoColor: Color
+    var tickColor: Color
+    var needleColor: Color
     
-    let coveredRadius: Double = 255
-    let tickCount: Int
-    let tachoColor: Color
-    let tickColor: Color
-    let needleColor: Color
+    var value: Int
     
-    let value: Int
-    
-    private var keyFrames: Array<KeyFrame> {
-        [
-            KeyFrame(offset: 0.3, value: 0, animationKind: .linear),
-            KeyFrame(offset: 0.6, value: tickCount + 1, animationKind: .easeInOut),
-            KeyFrame(offset: 0.9, value: value, animationKind: .easeOut),
-        ]
-    }
-    
-    // current keyframe number
-    @State var idx: Int = 0
+//    private var keyFrames: Array<KeyFrame<Angle>> {
+//        let angles = tickAngles
+//        return [
+//            KeyFrame(offset: 0.15, value: angles[0], animationKind: .easeOut),
+//            KeyFrame(offset: 0.7, value: tickAngles[tickCount + 1], animationKind: .easeInOut),
+//            KeyFrame(offset: 0.5, value: angles[value], animationKind: .spring),
+//        ]
+//    }
+
+    @State
+    private var currentValue = 0
     
     public var body: some View {
-        TimelineView(.keyframe(timeOffsets: keyFrames.map {$0.offset})) { timeline in
+//        var frames = keyFrames
+//        TimelineView(.keyFrames(keyFrames)) { context in
             GeometryReader { geometry in
                 let calcSize = min(geometry.size.width, geometry.size.height)
-                let ticks = tickAngles.dropFirst().dropLast()
                 ZStack {
-                    TachoShape()
+                    TachoOutline()
                         .foregroundColor(tachoColor)
-                    ForEach(ticks, id: \.self) { angle in
-                        tick(at: angle, size: calcSize )
+                    ForEach(tickAngles.dropFirst().dropLast(), id: \.self) {
+                        tick(of: calcSize)
+                            .rotationEffect($0)
                     }
-                    let keyFrame = keyFrames[idx]
-                    needle(at: tickAngles[keyFrame.value], size: calcSize)
-                        .animation(keyFrame.animation, value: keyFrame.value)
+//                    let keyFrame = frames.removeFirst()
+                    needle(of: calcSize)
+                        .rotationEffect(tickAngles[currentValue])
+//                        .animation(keyFrame.animation, value: keyFrame.value)
+                        .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.5),
+                                   value: currentValue)
                 }
                 .frame(width: calcSize, height: calcSize)
-            }
-            .onChange(of: timeline.date) { (date: Date) in advanceKeyFrame() }
-            .onAppear { advanceKeyFrame() }
+//            }
+            .onChange(of: value) { currentValue = $0 }
+            .onAppear { currentValue = value }
         }
-    }
-    
-    func advanceKeyFrame() {
-        // advance to next keyframe
-        idx = (idx + 1) % keyFrames.count
     }
     
     public init(tickCount: Int,
@@ -89,6 +88,8 @@ public struct TachoView: View {
                 tickColor: Color,
                 needleColor: Color,
                 value: Int) {
+        assert(tickCount > 0)
+        assert((0...tickCount).contains(value))
         self.tickCount = tickCount
         self.tachoColor = tachoColor
         self.tickColor = tickColor
@@ -97,85 +98,24 @@ public struct TachoView: View {
     }
 }
 
-fileprivate enum KeyFrameAnimation {
-    case none
-    case linear
-    case easeOut
-    case easeIn
-    case easeInOut
-}
-
-@available(iOS 14, macOS 12.0, *)
-fileprivate struct KeyFrame {
-    let offset: TimeInterval
-    let value: Int
-    let animationKind: KeyFrameAnimation
-    
-    var animation: Animation? {
-        switch animationKind {
-        case .none: return nil
-        case .linear: return .linear(duration: offset)
-        case .easeIn: return .easeIn(duration: offset)
-        case .easeOut: return .easeOut(duration: offset)
-        case .easeInOut: return .easeInOut(duration: offset)
-        }
-    }
-}
-
-@available(iOS 14, macOS 12.0, *)
 struct TachoView_Previews: PreviewProvider {
+    struct InteractiveView: View {
+        @State
+        private var value = 3
+
+        var body: some View {
+            VStack {
+                TachoView(tickCount: 7,
+                          tachoColor: .red,
+                          tickColor: .blue,
+                          needleColor: .yellow,
+                          value: value)
+                Stepper("Value", value: $value, in: 1...7)
+            }
+        }
+    }
+
     static var previews: some View {
-        TachoView(tickCount: 7,
-                  tachoColor: Color.red,
-                  tickColor: Color.blue,
-                  needleColor: Color.yellow,
-                  value: 3)
-        .frame(width: 300, height: 300, alignment: .center)
+        InteractiveView()
     }
 }
-
-@available(iOS 14, macOS 12.0, *)
-struct KeyframeTimelineSchedule: TimelineSchedule {
-    let timeOffsets: Array<TimeInterval>
-
-    func entries(from startDate: Date, mode: TimelineScheduleMode) -> Entries {
-        Entries(start: startDate, offsets: timeOffsets)
-    }
-
-    struct Entries: Sequence, IteratorProtocol {
-        let offsets: Array<TimeInterval>
-        var last: Date
-        var idx: Int
-
-        init(start: Date, offsets: Array<TimeInterval>) {
-            self.last = start
-            self.offsets = offsets
-            self.idx = offsets.startIndex
-        }
-
-        mutating func next() -> Date? {
-            guard idx < offsets.endIndex else { return nil }
-            last = last.addingTimeInterval(offsets[idx])
-            offsets.formIndex(after: &idx)
-            return last
-        }
-    }
-}
-
-@available(iOS 14, macOS 12.0, *)
-extension TimelineSchedule where Self == KeyframeTimelineSchedule {
-    static func keyframe(timeOffsets: Array<TimeInterval>) -> KeyframeTimelineSchedule {
-            .init(timeOffsets: timeOffsets)
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
