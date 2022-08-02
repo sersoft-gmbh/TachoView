@@ -112,6 +112,7 @@ struct TachoView_Previews: PreviewProvider {
                           value: value)
                 Stepper("Value", value: $value, in: 1...7)
             }
+            .padding(20)
         }
     }
 
