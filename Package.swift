@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "TachoView",
+    name: "swift-tacho-view",
     platforms: [
         .iOS(.v15),
         .tvOS(.v15),
